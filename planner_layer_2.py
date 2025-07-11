@@ -42,7 +42,6 @@ class PotentialFieldPlanner:
 
         self.pse = pse_object
 
-        # --- Threading for Background Updates ---
         self._lock = threading.Lock() # To safely access shared data like the fiducial marker dictionary
         # self._stop_event = threading.Event()
         # self._update_thread = threading.Thread(target=self._periodic_pose_updater, daemon=True)         
@@ -62,7 +61,6 @@ class PotentialFieldPlanner:
         with self._lock:
             self.pse.cv_make_robot_goal_id(frame, self.type)
 
-            # One-time initialization to set up map and goal IDs
             if not self.map_ids_found:
                 print("Planner Initialized: Map corners detected.")
                 self.goal_ids = list(utils.GOAL_FIDUCIALS)
@@ -162,10 +160,6 @@ class PotentialFieldPlanner:
     
     '''TEMPORARYILY WRITTEN'''
     def convert_to_wheel_velocities(self, v, w):
-        """
-        --- SOLUTION FOR WORK NEEDED #1 ---
-        Converts (v, w) to left and right wheel speeds in rad/s.
-        """
         v_right = (2 * v + w * utils.WHEEL_BASE_M) / (2 * utils.WHEEL_RADIUS_M)
         v_left = (2 * v - w * utils.WHEEL_BASE_M) / (2 * utils.WHEEL_RADIUS_M)
         return v_left, v_right

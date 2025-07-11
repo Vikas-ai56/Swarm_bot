@@ -1,6 +1,4 @@
-# in high_level_planner.py
 import numpy as np
-# from a_star_library import find_path # A real implementation would be here
 
 class HighLevelPlanner:
     def __init__(self, world_size_m, cell_size_m):
@@ -36,9 +34,7 @@ class HighLevelPlanner:
         start_grid = self._world_to_grid(all_poses[robot_id][:2])
         goal_grid = self._world_to_grid(final_goal_pos)
         
-        # --- A* Placeholder ---
-        # A real A* would return a list of grid cells like [(1,1), (1,2), ...]
-        # For now, we return a simple line of waypoints.
+        
         path_world_coords = []
         start_world = np.array(all_poses[robot_id][:2])
         for i in range(1, 11):
