@@ -1,0 +1,174 @@
+# implement the potential field planner
+
+# Make sure to map the robot and goal_pair
+# camera frame should be called from some other program for the cv_get_map_corners and cv_make_robot_id 
+# for time being the frame is being given as a parameter to the class
+
+'''
+    WORK NEEDED:- 1. Figure out how to give the velocity to each wheel
+                  2. Future path interaction is not handled
+                  3. Once a robot is reachs a goal then that goal_id must 
+                     be removed from the goals list (How to check this cond?).
+'''
+
+import numpy as np
+import pose_estimation as pse
+import time
+import math
+import utils
+import threading
+
+class PotentialFieldPlanner:
+    # remove the frame operator because each time a new object of the class is created for a new frame
+    def __init__(self, aruco_type, pse_object):
+        self.linear_gain = 2.3
+        self.angular_gain = 1.7
+        self.frame = None
+        self.type = aruco_type
+        self.goal_threshold = 0.01
+
+        # These parameter is subject to changes
+        self.max_linear_velocity = 6
+        self.max_angular_velocity = math.pi/2
+
+        # Control parameters
+        self.attraction_gain = 1.3
+        self.repulsion_gain = 1.3
+        self.obstacale_inf_radius = 0.54
+
+        # self.map_ids = []
+        self.goal_ids = []
+        self.map_ids_found = False
+
+        self.pse = pse_object
+
+        # --- Threading for Background Updates ---
+        self._lock = threading.Lock() # To safely access shared data like the fiducial marker dictionary
+        # self._stop_event = threading.Event()
+        # self._update_thread = threading.Thread(target=self._periodic_pose_updater, daemon=True)         
+
+
+    def update_poses_from_frame(self, frame):
+        """
+        Updates the internal marker dictionary using a new camera frame.
+        This is the main entry point for new data.
+        """
+        if frame is None:
+            return
+        
+        self.frame = frame
+
+        # Use the lock to ensure thread-safe updates to the dictionary
+        with self._lock:
+            self.pse.cv_make_robot_goal_id(frame, self.type)
+
+            # One-time initialization to set up map and goal IDs
+            if not self.map_ids_found:
+                print("Planner Initialized: Map corners detected.")
+                self.goal_ids = list(utils.GOAL_FIDUCIALS)
+                self.map_ids_found = True
+            
+
+
+    def distance_to_goal(self, robotId, goalId):
+        # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
+        # self.pse.cv_make_robot_goal_id(self.frame, self.type)
+
+        rx, ry = self.pse.cv_fiducial_MarkerDict[robotId][0:2]
+        gx, gy = self.pse.cv_fiducial_MarkerDict[goalId][0:2]
+
+        return math.sqrt((rx - gx)**2 + (ry - gy)**2)
+    
+    def angle_to_goal(self, robotId, goalId):
+        # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
+        # self.pse.cv_make_robot_goal_id(self.frame, self.type)
+
+        rx, ry = self.pse.cv_fiducial_MarkerDict[robotId][0:2]
+        gx, gy = self.pse.cv_fiducial_MarkerDict[goalId][0:2]
+        angle = math.atan2(gy - ry, gx - rx)
+
+        return angle
+    
+    # Gemini
+    def calculate_net_force(self, robotId, goalId):
+        # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
+        # self.pse.cv_make_robot_goal_id(self.frame, self.type)
+
+        '''REVIEW BELOW LINE'''
+        if goalId in self.goal_ids and self.goal_reached.get(goalId,False):
+            print("Already goal Reaached")
+            return np.array([0,0],dtype='int')
+        
+        robot_pose = self.pse.cv_fiducial_MarkerDict[robotId]
+        goal_pose = self.pse.cv_fiducial_MarkerDict[goalId]
+
+        robot_pos = np.array(robot_pose[0:2], dtype=float)
+        goal_pos = np.array(goal_pose[0:2], dtype=float)
+
+        if np.linalg.norm(goal_pos - robot_pos) <= self.goal_threshold:
+            print("Goal Reached")
+            self.goal_reached[goalId] = True
+            return 0
+        
+        f_att = self.attraction_gain*(goal_pos - robot_pos)
+        f_rep_total = np.zeros(2, dtype=float)
+
+        for obs_id in utils.ROBOT_MARKERS:
+            if obs_id == robotId or self.pse.cv_fiducial_MarkerDict.get(obs_id,1234) == 1234:
+                continue
+
+            obs_pos = np.array(self.pse.cv_fiducial_MarkerDict[obs_id][0:2], dtype=float)
+            dist_to_obs = np.linalg.norm(obs_pos - robot_pos)
+
+            if dist_to_obs < self.obstacale_inf_radius:
+                coeff = (0.5*self.repulsion_gain*
+                         ((1/dist_to_obs) - (1/self.obstacale_inf_radius))/
+                         (dist_to_obs**3))
+                
+                f_rep_total -= coeff*(robot_pos-obs_pos)
+
+        f_net = f_att + f_rep_total
+        return f_net
+    
+    '''
+    WORK NEEDED:- Figure out how to give the velocity to each wheel
+    '''
+    def get_velocity_commands(self, robotId, goalId):
+        # The below line is not required because self.calculate_net_force and this function run one after another 
+        # without any time interval between them
+        # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
+        # self.pse.cv_make_robot_id(self.frame, self.type)
+
+        robot_angle = self.pse.cv_fiducial_MarkerDict[robotId][2]
+
+        '''NOTE VERYYYY IMP (do not use the turtlebot controller way)'''
+        net_force = self.calculate_net_force(robotId,goalId)
+
+        # If the robot is too fast or too slow adjust the linear_gain factor to nullify any errors
+        linear_velocity = np.linalg.norm(net_force)
+        linear_velocity = min(linear_velocity, self.max_linear_velocity)
+        print(net_force)
+        desired_angle = math.atan2(net_force[1], net_force[0])
+        
+        # Calculate the angle error, handling wrap-around from +pi to -pi
+        angle_error = math.atan2(math.sin(desired_angle - robot_angle), 
+                                 math.cos(desired_angle - robot_angle))
+        
+        # If the robot is too fast or too slow adjust the linear_gain factor to nullify any changes
+        angular_velocity = angle_error * self.angular_gain
+        angular_velocity = max(min(angular_velocity, self.max_angular_velocity), -self.max_angular_velocity)
+        
+        return linear_velocity, angular_velocity
+    
+    '''TEMPORARYILY WRITTEN'''
+    def convert_to_wheel_velocities(self, v, w):
+        """
+        --- SOLUTION FOR WORK NEEDED #1 ---
+        Converts (v, w) to left and right wheel speeds in rad/s.
+        """
+        v_right = (2 * v + w * utils.WHEEL_BASE_M) / (2 * utils.WHEEL_RADIUS_M)
+        v_left = (2 * v - w * utils.WHEEL_BASE_M) / (2 * utils.WHEEL_RADIUS_M)
+        return v_left, v_right
+
+
+
