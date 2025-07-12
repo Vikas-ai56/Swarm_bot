@@ -81,6 +81,7 @@ class PoseEstimation:
         
         return Robot_pose, Robot_Ids
     
+    '''IMPORTANT'''
     def _create_transformation_matrix(self, rvec, tvec):
         mat = np.identity(4)
         rmat, _ = cv2.Rodrigues(rvec)
@@ -147,7 +148,8 @@ class PoseEstimation:
                 camera_transforms[marker_id] = self._create_transformation_matrix(rvec, tvec)
                 # Visualize the camera-relative pose
                 cv2.drawFrameAxes(frame, utils.cameraMatrix, utils.distCoeffs, rvec, tvec, marker_size)
-                detected_markers = utils.aruco_display(corners,ids,rejected,frame)
+                # detected_markers = utils.aruco_display(corners,ids,rejected,frame)
+
         # --- STEP 2: Dynamically Select the Origin Marker ---
         if not camera_transforms:
             return
@@ -165,12 +167,23 @@ class PoseEstimation:
             return
 
         # --- STEP 3: Calculate the Inverse Transform of the Origin ---
+        '''
+        In short: The inverse transformation is required to "move" the origin of your coordinate
+        system from the camera's lens to the physical ArUco marker you have designated as the 
+        world's (0,0,0) point'''
+        '''
+        THis operation is done so that the origin(landmark for reference) can be set
+        to the given marker'''
         T_cam_origin = camera_transforms[origin_id]
         T_origin_cam = self._invert_transformation(T_cam_origin)
 
         # --- STEP 4: Transform ALL Marker Poses into the World (Origin) Frame ---
         for marker_id, T_cam_marker in camera_transforms.items():
             # T_world = T_world->cam * T_cam->marker  (where T_world->cam is T_origin_cam)
+            '''
+            Calculations are done from the transformation matrix created w.r.t the origin marker
+            not camera's origin (ROBUSTNESS)
+            '''
             T_world_marker = np.dot(T_origin_cam, T_cam_marker)
             final_pose = self._get_pose_from_matrix(T_world_marker)
             self.cv_fiducial_MarkerDict[marker_id] = final_pose
