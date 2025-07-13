@@ -81,7 +81,7 @@ class PoseEstimation:
         
         return Robot_pose, Robot_Ids
     
-    '''IMPORTANT'''
+    '''IMPORTANT:- Creates a homogenous transformation matrix {4*4}[Rotation matri(rmat) + translation vector]'''
     def _create_transformation_matrix(self, rvec, tvec):
         mat = np.identity(4)
         rmat, _ = cv2.Rodrigues(rvec)
@@ -111,6 +111,7 @@ class PoseEstimation:
         1. Detect all markers and their camera-relative poses.
         2. Select a map corner as the dynamic origin.
         3. Transform all other marker poses into the origin's frame of reference.
+        docs for reference:- https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html
         """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         arucoDict = cv2.aruco.getPredefinedDictionary(type)
@@ -190,7 +191,3 @@ class PoseEstimation:
         print(self.cv_fiducial_MarkerDict)
             
         # --- STEP 5: Visualize Markers ---
-
-
-
-
