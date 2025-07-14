@@ -188,6 +188,6 @@ class PoseEstimation:
             T_world_marker = np.dot(T_origin_cam, T_cam_marker)
             final_pose = self._get_pose_from_matrix(T_world_marker)
             self.cv_fiducial_MarkerDict[marker_id] = final_pose
-        print(self.cv_fiducial_MarkerDict)
+        # print(self.cv_fiducial_MarkerDict)
             
         # --- STEP 5: Visualize Markers ---
