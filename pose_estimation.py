@@ -142,6 +142,7 @@ class PoseEstimation:
             image_points = corners[i]
             
             # Use solvePnP for the current marker
+            '''Correct these camera and dist matrix'''
             success, rvec, tvec = cv2.solvePnP(object_points, image_points, utils.cameraMatrix, utils.distCoeffs)
             
             if success:

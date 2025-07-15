@@ -33,6 +33,8 @@ class PotentialFieldPlanner:
         # These parameter is subject to changes
         self.max_linear_velocity = 6
         self.max_angular_velocity = math.pi/2
+        # To make sure the robot is not to slow when calculation is w.r.t to immediate_waypoint
+        self.min_linear_velocity = 1.7
 
         # Control parameters
         self.attraction_gain = 1.3
@@ -91,11 +93,12 @@ class PotentialFieldPlanner:
         return angle
     
     # Gemini
-    def calculate_net_force(self, robotId, goalId):
+    def calculate_net_force(self, robotId, goalId, immediate_waypoint):
         # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
         # self.pse.cv_make_robot_goal_id(self.frame, self.type)
 
         '''REVIEW BELOW LINE'''
+        '''NOTE Soln:- handled in main.py itself'''
         # if goalId in self.goal_ids and self.goal_reached.get(goalId,False):
         #     print("Already goal Reaached")
         #     return np.array([0,0],dtype='int')
@@ -104,14 +107,15 @@ class PotentialFieldPlanner:
         goal_pose = self.pse.cv_fiducial_MarkerDict[goalId]
 
         robot_pos = np.array(robot_pose[0:2], dtype=float)
-        goal_pos = np.array(goal_pose[0:2], dtype=float)
+        '''not required because force calculation must w.r.t immediate_waypoint'''
+        # goal_pos = np.array(goal_pose[0:2], dtype=float)
+        immediate_waypoint = np.array(immediate_waypoint, dtype='float32')
 
-        if np.linalg.norm(goal_pos - robot_pos) <= self.goal_threshold:
+        if np.linalg.norm(immediate_waypoint - robot_pos) <= self.goal_threshold:
             print("Goal Reached")
-            self.goal_reached[goalId] = True
             return 0
         
-        f_att = self.attraction_gain*(goal_pos - robot_pos)
+        f_att = self.attraction_gain*(immediate_waypoint - robot_pos)
         f_rep_total = np.zeros(2, dtype=float)
 
         for obs_id in utils.ROBOT_MARKERS:
@@ -129,7 +133,7 @@ class PotentialFieldPlanner:
                 f_rep_total -= coeff*(robot_pos-obs_pos)
 
         f_net = f_att + f_rep_total
-        return f_net
+        return f_net, immediate_waypoint
     
     '''
     WORK NEEDED:- Figure out how to give the velocity to each wheel
@@ -137,28 +141,32 @@ class PotentialFieldPlanner:
                 the velocity should be calculated to move to the next immediate waypoint as
                 recommenended by the path planned by A*
     '''
-    def get_velocity_commands(self, robotId, goalId):
+    def get_velocity_commands(self, robotId, goalId, immediate_waypoint):
         # The below line is not required because self.calculate_net_force and this function run one after another 
         # without any time interval between them
         # The below line can be removed because the image frame is the same as recieved from the "update_poses_from_frame"
         # self.pse.cv_make_robot_id(self.frame, self.type)
 
         robot_angle = self.pse.cv_fiducial_MarkerDict[robotId][2]
+        goal_pos = np.array(self.pse.cv_fiducial_MarkerDict[goalId][0:2], dtype='float32')
 
         '''NOTE VERYYYY IMP (do not use the turtlebot controller way)'''
-        net_force = self.calculate_net_force(robotId,goalId)
+        net_force, immediate_waypoint = self.calculate_net_force(robotId, goalId, immediate_waypoint)
 
-        # If the robot is too fast or too slow adjust the linear_gain factor to nullify any errors
         linear_velocity = np.linalg.norm(net_force)
+
+        '''To make sure that the robot is not too slow'''
+        if np.linalg.norm(immediate_waypoint-goal_pos) >= 0.15: # this hyperparam must be reviewed
+            linear_velocity = self.max_linear_velocity
+
         linear_velocity = min(linear_velocity, self.max_linear_velocity)
         # print(net_force)
         desired_angle = math.atan2(net_force[1], net_force[0])
         
-        # Calculate the angle error, handling wrap-around from +pi to -pi
+        
         angle_error = math.atan2(math.sin(desired_angle - robot_angle), 
                                  math.cos(desired_angle - robot_angle))
         
-        # If the robot is too fast or too slow adjust the linear_gain factor to nullify any changes
         angular_velocity = angle_error * self.angular_gain
         angular_velocity = max(min(angular_velocity, self.max_angular_velocity), -self.max_angular_velocity)
         
