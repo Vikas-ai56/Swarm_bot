@@ -34,12 +34,12 @@ class HighLevelPlanner:
         world_y = (grid_pos[1] + 0.5) * self.cell_size_m
         return np.array([world_x, world_y])
 
-    def plan_path(self, robot_id, all_poses, goal_id):
+    def plan_path(self, robot_id, all_poses, goal_id, occupancy_grid):
         """
         --- SOLUTION FOR WORK NEEDED #2 ---
         Plans a global path using A* on an occupancy grid.
         """
-        occupancy_grid = np.zeros((self.grid_height, self.grid_width))
+        # occupancy_grid = np.zeros((self.grid_height, self.grid_width))
 
         # OCCUPANCY GRID SETUP
         '''OPTIONAL'''# When setting up another robot as an obstacle we have to keep threshold
