@@ -31,12 +31,12 @@ class PotentialFieldPlanner:
         self.goal_threshold = 0.07
 
         # These parameter is subject to changes
-        self.max_linear_velocity = 6
+        self.max_linear_velocity = 0.5 # 50cm/s
         self.max_angular_velocity = math.pi/2
         # To make sure the robot is not to slow when calculation is w.r.t to immediate_waypoint
         self.min_linear_velocity = 1.7
 
-        # Control parameters
+        # Control parameters (they are values should be dimensionally correct [Ex- M^1L^1T^-2I^0])
         self.attraction_gain = 1.3
         self.repulsion_gain = 1.3
         self.obstacale_inf_radius = 0.54
@@ -104,11 +104,12 @@ class PotentialFieldPlanner:
         #     return np.array([0,0],dtype='int')
         
         robot_pose = self.pse.cv_fiducial_MarkerDict[robotId]
-        goal_pose = self.pse.cv_fiducial_MarkerDict[goalId]
-
         robot_pos = np.array(robot_pose[0:2], dtype=float)
+
         '''not required because force calculation must w.r.t immediate_waypoint'''
+        # goal_pose = self.pse.cv_fiducial_MarkerDict[goalId]
         # goal_pos = np.array(goal_pose[0:2], dtype=float)
+
         immediate_waypoint = np.array(immediate_waypoint, dtype='float32')
 
         if np.linalg.norm(immediate_waypoint - robot_pos) <= self.goal_threshold:
@@ -153,20 +154,30 @@ class PotentialFieldPlanner:
         '''NOTE VERYYYY IMP (do not use the turtlebot controller way)'''
         net_force, immediate_waypoint = self.calculate_net_force(robotId, goalId, immediate_waypoint)
 
+
+# NOTE there are two different logics implemented below for linear velocity calculation 
+# TEST BOTH
+# ---------------------------------------- LOGIC-1-----------------------------------------
         linear_velocity = np.linalg.norm(net_force)
+        '''To make sure that the robot is not too slow(because the distance between the waypoint 
+                                                       and robot pose might be very small)'''
+        if np.linalg.norm(immediate_waypoint-goal_pos) >= 0.2: # (20cm) this hyperparam must be reviewed
+            linear_velocity = self.min_linear_velocity
 
-        '''To make sure that the robot is not too slow'''
-        if np.linalg.norm(immediate_waypoint-goal_pos) >= 0.15: # this hyperparam must be reviewed
-            linear_velocity = self.max_linear_velocity
-
-        linear_velocity = min(linear_velocity, self.max_linear_velocity)
+        linear_velocity = min(linear_velocity, self.max_linear_velocity)       
         # print(net_force)
+# -----------------------------------------------------------------------------------------
+
+# ----------------------------------- LOGIC-2(Smoothed Method) ----------------------------
         desired_angle = math.atan2(net_force[1], net_force[0])
-        
-        
+                
         angle_error = math.atan2(math.sin(desired_angle - robot_angle), 
                                  math.cos(desired_angle - robot_angle))
         
+        heading_factor = max(0, math.cos(angle_error))
+        linear_velocity = self.max_linear_velocity * heading_factor
+# -----------------------------------------------------------------------------------------
+
         angular_velocity = angle_error * self.angular_gain
         angular_velocity = max(min(angular_velocity, self.max_angular_velocity), -self.max_angular_velocity)
         

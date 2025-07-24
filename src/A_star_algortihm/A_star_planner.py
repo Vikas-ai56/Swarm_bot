@@ -61,9 +61,13 @@ class HighLevelPlanner:
         path_world_coords.append((x,y))
 
         while not (x == node.parent_i and y == node.parent_j):
-            path_world_coords.append((node.parent_i, node.parent_j))
             x = node.parent_i
             y = node.parent_j
+# NOTE
+#  :- converting back to world Coordinates
+# ------------------------------------------------------------------
+            path_world_coords.append((self._grid_to_world((x,y))))
+# ------------------------------------------------------------------
                    
         path_world_coords.reverse()
         
