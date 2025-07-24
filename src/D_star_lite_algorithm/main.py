@@ -1,4 +1,7 @@
-# in main.py
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import cv2
 import numpy as np
 import time
@@ -16,7 +19,7 @@ CONTROL_INTERVAL = 1.0 / CONTROL_LOOP_HZ
 def main():
     # --- 1. Initialization ---
     pse = PoseEstimation()
-    low_planner = PotentialFieldPlanner()
+    low_planner = PotentialFieldPlanner(aruco_type = utils.ARUCO_DICT["DICT_ARUCO_ORIGINAL"], pse_object = pse)
     
     # Create a dictionary to hold a D* Lite planner for each robot
     planners = {}

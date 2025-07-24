@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import cv2
 import numpy as np
 import math
@@ -6,7 +10,6 @@ import utils
 
 from pose_estimation import PoseEstimation
 from planner_layer_2 import PotentialFieldPlanner # Or LowLevelPlanner if you rename the file
-from planner_layer_1 import HighLevelPlanner
 
 ROBOT_ASSIGNMENTS = {
     5: 6, 
@@ -23,7 +26,6 @@ def main():
     """The main execution function."""
     
     pse = PoseEstimation()
-    path_planner = HighLevelPlanner((utils.REGION_WIDTH,utils.REGION_HEIGHT), 0.1) # each cell in the occupancy grid has side_length = 10cm
     immediate_planner = PotentialFieldPlanner(aruco_type = utils.ARUCO_DICT["DICT_ARUCO_ORIGINAL"], pse_object = pse)
     
     camera_matrix, dist_coeffs = pse.callibrate_init()
